@@ -34,8 +34,8 @@ def authenticate_drive_api():
     return build("drive", "v3", credentials=creds)
 
 
-# Function to list files recursively
-def list_files(service, folder_id):
+# Function to list files recursively with their paths
+def list_files(service, folder_id, current_path="", file_list=[]):
     query = f"'{folder_id}' in parents"
     results = (
         service.files()
@@ -45,10 +45,20 @@ def list_files(service, folder_id):
     items = results.get("files", [])
 
     for item in items:
-        print(f"Found file: {item['name']} (ID: {item['id']})")
+        # Construct the full path
+        full_path = f"{current_path}/{item['name']}" if current_path else item["name"]
+        # print(f"Found file: {full_path} (ID: {item['id']})")
+
         if item["mimeType"] == "application/vnd.google-apps.folder":
-            # If the item is a folder, call the function recursively
-            list_files(service, item["id"])
+            # If the item is a folder, call the function recursively with the updated path
+            list_files(service, item["id"], full_path, file_list)
+        else:
+            if item["mimeType"] == "application/vnd.google-apps.shortcut":
+                pass
+            else:
+                file_list.append(
+                    {"name": item["name"], "id": item["id"], "path": full_path}
+                )
 
 
 if __name__ == "__main__":
@@ -56,5 +66,13 @@ if __name__ == "__main__":
     service = authenticate_drive_api()
 
     # Replace 'YOUR_FOLDER_ID' with the ID of the folder you want to list
+    # motion-x id
+    folder_id = "1jn51yiS0Savdsw6M67kkv2lXNOITNKfU"
+    # motion-x++ id
     folder_id = "1Tquahp2HWBP_R2tNi5cxsVJ3oEJ8F0Xx"
-    list_files(service, folder_id)
+
+    file_list = []
+
+    list_files(service, folder_id, file_list=file_list)
+
+    print("List of files:", file_list)
