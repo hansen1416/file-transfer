@@ -1,10 +1,13 @@
 import os.path
+import io
 
+import google.auth
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaIoBaseDownload
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/drive.metadata.readonly"]
@@ -62,17 +65,77 @@ def list_files(service, folder_id, current_path="", file_list=[]):
 
 
 if __name__ == "__main__":
+
+    import argparse
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--id",
+        type=str,
+        required=True,
+        help="the folder id name to download from",
+    )
+
+    parser.add_argument(
+        "--local",
+        type=str,
+        required=True,
+        help="the target folder to download to",
+    )
+
+    args = parser.parse_args()
+
+    assert args.local, "Please provide a local folder to download to"
+
     # Authenticate and create the Drive API service
     service = authenticate_drive_api()
 
     # Replace 'YOUR_FOLDER_ID' with the ID of the folder you want to list
-    # motion-x id
-    folder_id = "1jn51yiS0Savdsw6M67kkv2lXNOITNKfU"
-    # motion-x++ id
-    folder_id = "1Tquahp2HWBP_R2tNi5cxsVJ3oEJ8F0Xx"
+    # # motion-x id
+    # folder_id = "1jn51yiS0Savdsw6M67kkv2lXNOITNKfU"
+    # # motion-x++ id
+    # folder_id = "1Tquahp2HWBP_R2tNi5cxsVJ3oEJ8F0Xx"
+
+    folder_id = args.id
 
     file_list = []
 
     list_files(service, folder_id, file_list=file_list)
 
-    print("List of files:", file_list)
+    # print("List of files:", file_list)
+
+    # save all fiiles to --local folder
+    for file in file_list:
+        print(f"Prepare to download {file["path"]}")
+        file_id = file["id"]
+        file_name = file["name"]
+        file_path = file["path"]
+        local_path = os.path.join(args.local, file_path)
+
+        # check if the file already exists in local
+        if os.path.exists(local_path):
+            print(f"{local_path} already exists in local")
+            continue
+
+        try:
+            # create the folder if it does not exist
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+            request = service.files().get_media(fileId=file_id)
+
+            with open(local_path, "wb") as fh:
+                downloader = MediaIoBaseDownload(fh, request)
+                done = False
+                while done is False:
+                    status, done = downloader.next_chunk()
+                    print(f"Download {int(status.progress() * 100)}.")
+
+            print()
+        except HttpError as e:
+            print(f"An error occurred: {e}")
+            # unlink the local file if it is not fully downloaded
+            if os.path.exists(local_path):
+                os.unlink(local_path)
+
+            continue
